@@ -178,14 +178,6 @@ class CareerAgent:
         
         return response
     
-    def get_status(self):
-        """获取Agent状态"""
-        return {
-            "state": self.current_state,
-            "profile_items": len(self.user_profile),
-            "conversation_count": len(self.conversation_history),
-            "user_profile": self.user_profile
-        }
     
     def submit_feedback(self, feedback_data):
         """提交反馈"""
@@ -259,36 +251,4 @@ def test_agent():
 if __name__ == "__main__":
     test_agent()
 
-
-class CareerAgent:
-    def __init__(self, api_key):
-        self.api_key = api_key
-        self.api_url = "https://api.deepseek.com/chat/completions"
-        self.conversation_history = []
-        self.user_profile = {}
-        self.current_state = "general"
-    
-    def passive_chat(self, user_input):
-        """使用知识库增强的对话"""
-        # 使用知识库增强问题
-        enhanced_input = enhance_prompt(user_input)
-        
-        # 原有的对话逻辑
-        current_state = self.detect_state(user_input)
-        self.update_profile_from_input(user_input)
-        
-        # 构建消息（使用增强后的问题）
-        messages = [
-            {"role": "system", "content": "你是专业的职业规划师，提供具体可行的建议。"},
-            {"role": "user", "content": enhanced_input}
-        ]
-        
-        # 调用API
-        response = self.call_deepseek(messages)
-        
-        # 更新对话历史
-        self.conversation_history.append({"role": "user", "content": user_input})
-        self.conversation_history.append({"role": "assistant", "content": response})
-        
-        return response
     
