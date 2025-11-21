@@ -16,20 +16,6 @@ class CareerAgent:
         self.current_state = "general"
         self.feedback_system = FeedbackSystem()
         self.metrics_dashboard = MetricsDashboard()  # 数据监控
-        
-    
-    def get_status(self):
-        """获取Agent状态"""
-        return {
-            "state": self.current_state,
-            "profile_items": len(self.user_profile),
-            "conversation_count": len(self.conversation_history) // 2,
-            "user_profile": self.user_profile
-        }
-    
-    def get_conversation_summary(self):
-        """获取对话摘要"""
-        # ... 现有代码 ...
     
     def detect_state(self, user_input):
         """智能状态检测"""
@@ -174,10 +160,19 @@ class CareerAgent:
         self.metrics_dashboard.record_session(user_input, response)
         
         # 修复：正确设置会话结束状态
-        st.session_state.conversation_ended = True
+        if 'conversation_ended' in st.session_state:
+            st.session_state.conversation_ended = True
         
         return response
     
+    def get_status(self):
+        """获取Agent状态"""
+        return {
+            "state": self.current_state,
+            "profile_items": len(self.user_profile),
+            "conversation_count": len(self.conversation_history),
+            "user_profile": self.user_profile
+        }
     
     def submit_feedback(self, feedback_data):
         """提交反馈"""
@@ -250,5 +245,3 @@ def test_agent():
 
 if __name__ == "__main__":
     test_agent()
-
-    
