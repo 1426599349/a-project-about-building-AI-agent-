@@ -1,0 +1,72 @@
+{
+  "sessions": [
+    {
+      "timestamp": "2025-11-17T22:55:10.880177",
+      "user_input": "薪资包括哪些组成部分",
+      "response_preview": "作为职业规划师，我很乐意为您详细解析薪资的组成部分。薪资结构通常包含多个要素，了解这些能帮助您在求职或谈判时更全面地评估工作机会。\n\n以下是薪资的主要组成部分：\n\n**1. 固定薪资**\n- **基本工资**：核心收入，按周期（月/年）发放\n- **岗位工资**：根据职位级别确定的固定部分\n- **技能工资**：基于专业资质或特殊技能\n\n**2. 浮动薪资**\n- **绩效奖金**：与个人/团队业",
+      "session_duration": null
+    }
+  ],
+  "total_turns": 4,
+  "api_calls": [
+    {
+      "timestamp": "2025-11-17T22:55:10.869265",
+      "success": true,
+      "response_time": 17.138601303100586,
+      "user_input": "薪资包括哪些组成部分",
+      "error_msg": null
+    }
+  ],
+  "function_usage": {
+    "career_analysis": 0,
+    "resume_optimization": 1,
+    "interview_coaching": 0,
+    "free_chat": 3
+  },
+  "user_satisfaction": {
+    "1": 0,
+    "2": 0,
+    "3": 0,
+    "4": 0,
+    "5": 1
+  },
+  "response_times": [
+    17.495875120162964,
+    12.416369915008545,
+    3.330873727798462
+  ],
+  "daily_metrics": {
+    "2025-11-07": {
+      "sessions": 3,
+      "turns": 4
+    },
+    "2025-11-17": {
+      "sessions": 1,
+      "turns": 0
+    }
+  },
+  "performance_metrics": {
+    "total_api_calls": 1,
+    "successful_calls": 1,
+    "failed_calls": 0,
+    "total_response_time": 17.138601303100586,
+    "average_response_time": 17.138601303100586
+  },
+  "daily_stats": {
+    "2025-11-17": {
+      "api_calls": 1,
+      "successful_calls": 1,
+      "failed_calls": 0,
+      "total_response_time": 17.138601303100586,
+      "sessions": 1
+    }
+  },
+  "user_feedback": [
+    {
+      "timestamp": "2025-11-17T22:55:21.329153",
+      "rating": 4,
+      "type": "Agent使用体验",
+      "content_preview": "快速反馈：对话体验良好\n用户问题：薪资包括哪些组成部分"
+    }
+  ]
+}

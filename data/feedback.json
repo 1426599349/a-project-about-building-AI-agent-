@@ -1,0 +1,28 @@
+{
+  "feedbacks": [
+    {
+      "id": "446fb651",
+      "timestamp": "2025-11-17T22:35:12.844047",
+      "type": "Agent使用体验",
+      "rating": 5,
+      "content": "输出需要更详细",
+      "contact": "未提供"
+    },
+    {
+      "id": "1b1d7e0d",
+      "timestamp": "2025-11-17T22:55:21.317540",
+      "type": "Agent使用体验",
+      "rating": 4,
+      "content": "快速反馈：对话体验良好\n用户问题：薪资包括哪些组成部分",
+      "contact": "快速反馈"
+    }
+  ],
+  "summary": {
+    "total_feedbacks": 2,
+    "average_rating": 4.5,
+    "bug_reports": 0,
+    "feature_requests": 0,
+    "general_feedback": 0,
+    "agent_feedback": 2
+  }
+}
