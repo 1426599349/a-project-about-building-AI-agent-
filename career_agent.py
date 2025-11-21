@@ -16,6 +16,20 @@ class CareerAgent:
         self.current_state = "general"
         self.feedback_system = FeedbackSystem()
         self.metrics_dashboard = MetricsDashboard()  # 数据监控
+        
+    
+    def get_status(self):
+        """获取Agent状态"""
+        return {
+            "state": self.current_state,
+            "profile_items": len(self.user_profile),
+            "conversation_count": len(self.conversation_history) // 2,
+            "user_profile": self.user_profile
+        }
+    
+    def get_conversation_summary(self):
+        """获取对话摘要"""
+        # ... 现有代码 ...
     
     def detect_state(self, user_input):
         """智能状态检测"""
