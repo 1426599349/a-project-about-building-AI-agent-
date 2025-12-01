@@ -1,4 +1,4 @@
-# agent_ui.py - 改进反馈触发
+# agent_ui.py - 改进反馈触发（已移除API密钥输入）
 import streamlit as st
 from career_agent import CareerAgent
 from feedback_system import FeedbackSystem
@@ -24,20 +24,12 @@ class AgentUI:
             st.session_state.last_user_input = ""
     
     def render_sidebar(self):
+        """渲染侧边栏 - 已移除API密钥输入"""
         with st.sidebar:
-             st.title("⚙️ 系统配置")
+            st.title("⚙️ 系统配置")
         
-        # API密钥输入
-        api_key = st.text_input(
-            "DeepSeek API密钥", 
-            type="password",
-            value=st.session_state.api_key,
-            placeholder="请输入您的DeepSeek API密钥"
-        )
-        
-        if api_key:
-            st.session_state.api_key = api_key
-            st.success("✅ API密钥已保存")
+        # 不再显示API密钥输入框
+        # API密钥现在从环境变量自动获取
         
         st.divider()
         
@@ -47,16 +39,27 @@ class AgentUI:
         col1, col2 = st.columns(2)
         with col1:
             if st.button("🚀 启动Agent", type="primary", use_container_width=True):
-                if st.session_state.api_key:
-                    try:
-                        st.session_state.career_agent = CareerAgent(st.session_state.api_key)
-                        st.session_state.agent_active = True
-                        st.success("Agent已启动！")
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"启动Agent失败: {e}")
-                else:
-                    st.error("请先输入API密钥")
+                try:
+                    # 直接从config获取API密钥
+                    from config import DEEPSEEK_API_KEY
+                    api_key = DEEPSEEK_API_KEY
+                    
+                    if not api_key:
+                        st.error("""
+                        ❌ API密钥未配置！
+                        
+                        请设置环境变量：
+                        1. 本地：创建 `.env` 文件，内容：DEEPSEEK_API_KEY=sk-你的密钥
+                        2. 云端：在 Streamlit Secrets 中添加 DEEPSEEK_API_KEY
+                        """)
+                        return
+                    
+                    st.session_state.career_agent = CareerAgent(api_key)
+                    st.session_state.agent_active = True
+                    st.success("✅ Agent已启动！")
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"启动Agent失败: {e}")
         
         with col2:
             if st.button("🔄 重置对话", use_container_width=True):
@@ -67,9 +70,8 @@ class AgentUI:
                 st.success("对话已重置")
                 st.rerun()
         
-        # Agent状态显示 - 修复的关键部分！
+        # Agent状态显示
         if st.session_state.agent_active:
-            # 添加安全检查
             if hasattr(st.session_state, 'career_agent') and st.session_state.career_agent is not None:
                 try:
                     status = st.session_state.career_agent.get_status()
@@ -105,7 +107,6 @@ class AgentUI:
             st.write("🔧 调试信息:")
             st.write(f"Agent对象: {st.session_state.get('career_agent')}")
             st.write(f"Agent活跃: {st.session_state.agent_active}")
-            st.write(f"API密钥设置: {bool(st.session_state.api_key)}")
     
     def render_feedback_button(self):
         """渲染反馈按钮"""
@@ -225,9 +226,8 @@ class AgentUI:
         if not st.session_state.agent_active:
             st.info("""
             ## 🚀 开始使用
-            1. 在左侧边栏输入API密钥
-            2. 点击"启动Agent"按钮
-            3. 开始与我对话！
+            1. 点击左侧边栏的"启动Agent"按钮
+            2. 开始与我对话！
 
             **💡 小贴士**：直接告诉我你的需求，我会自动识别并提供最合适的帮助！
             """)
