@@ -13,7 +13,7 @@ def main():
     # 添加密码保护（简单版）
     password = st.sidebar.text_input("管理员密码", type="password")
     
-    if password == "admin123":  # 在实际使用中应该使用更安全的认证方式
+    if password == "315315zjh":
         dashboard = MetricsDashboard()
         dashboard.show_dashboard()
     else:
