@@ -1,8 +1,7 @@
-# metrics_dashboard.py - 修复初始化问题
+# metrics_dashboard.py - 修复版（避免使用pyarrow）
 import streamlit as st
 import json
 import os
-import pandas as pd
 import plotly.express as px
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
@@ -18,9 +17,9 @@ class MetricsDashboard:
         os.makedirs(os.path.dirname(self.data_file), exist_ok=True)
         if not os.path.exists(self.data_file):
             initial_data = {
-                "api_calls": [],  # 修复：应该是列表而不是字典
-                "sessions": [],   # 修复：应该是列表而不是字典
-                "user_feedback": [],  # 修复：应该是列表而不是字典
+                "api_calls": [],
+                "sessions": [],
+                "user_feedback": [],
                 "performance_metrics": {
                     "total_api_calls": 0,
                     "successful_calls": 0,
@@ -39,7 +38,6 @@ class MetricsDashboard:
                 return json.load(f)
         except Exception as e:
             print(f"加载数据文件失败: {e}")
-            # 如果加载失败，重新初始化文件
             self.ensure_data_file()
             return self.load_data()
     
@@ -64,7 +62,7 @@ class MetricsDashboard:
                 "timestamp": datetime.now().isoformat(),
                 "success": success,
                 "response_time": response_time,
-                "user_input": user_input[:100] if user_input else None,  # 只保存前100字符
+                "user_input": user_input[:100] if user_input else None,
                 "error_msg": error_msg
             }
             
@@ -135,7 +133,7 @@ class MetricsDashboard:
                 "timestamp": datetime.now().isoformat(),
                 "user_input": user_input[:100] if user_input else None,
                 "response_preview": response[:200] if response else None,
-                "session_duration": None  # 可以扩展记录会话时长
+                "session_duration": None
             }
             
             data["sessions"].append(session)
@@ -252,12 +250,11 @@ class MetricsDashboard:
                 "recent_success_rate": 0
             }
     
-    def get_daily_stats_dataframe(self, days=7):
-        """获取日统计DataFrame"""
+    def get_daily_stats(self, days=7):
+        """获取日统计数据 - 简化版"""
         try:
             data = self.load_data()
             
-            # 确保 daily_stats 存在
             if "daily_stats" not in data:
                 data["daily_stats"] = {}
             
@@ -270,42 +267,40 @@ class MetricsDashboard:
             
             for i in range(days):
                 date = (datetime.now() - timedelta(days=i)).strftime("%Y-%m-%d")
-                dates.insert(0, date)  # 倒序插入，让时间正序
+                dates.insert(0, date)
                 
                 if date in data["daily_stats"]:
                     stats = data["daily_stats"][date]
-                    total_calls = stats["api_calls"]
-                    successful = stats["successful_calls"]
+                    total_calls = stats.get("api_calls", 0)
+                    successful = stats.get("successful_calls", 0)
                     
                     api_calls.insert(0, total_calls)
                     success_rates.insert(0, (successful / total_calls * 100) if total_calls > 0 else 0)
-                    avg_response_times.insert(0, (stats["total_response_time"] / successful) if successful > 0 else 0)
-                    sessions.insert(0, stats["sessions"])
+                    avg_response_times.insert(0, (stats.get("total_response_time", 0) / successful) if successful > 0 else 0)
+                    sessions.insert(0, stats.get("sessions", 0))
                 else:
                     api_calls.insert(0, 0)
                     success_rates.insert(0, 0)
                     avg_response_times.insert(0, 0)
                     sessions.insert(0, 0)
             
-            df = pd.DataFrame({
-                '日期': dates,
-                'API调用次数': api_calls,
-                '成功率 (%)': success_rates,
-                '平均响应时间 (s)': avg_response_times,
-                '会话数': sessions
-            })
-            
-            return df
+            return {
+                'dates': dates,
+                'api_calls': api_calls,
+                'success_rates': success_rates,
+                'avg_response_times': avg_response_times,
+                'sessions': sessions
+            }
+                
         except Exception as e:
             print(f"获取日统计数据失败: {e}")
-            # 返回空的DataFrame
-            return pd.DataFrame({
-                '日期': [],
-                'API调用次数': [],
-                '成功率 (%)': [],
-                '平均响应时间 (s)': [],
-                '会话数': []
-            })
+            return {
+                'dates': [],
+                'api_calls': [],
+                'success_rates': [],
+                'avg_response_times': [],
+                'sessions': []
+            }
     
     def show_dashboard(self):
         """显示数据面板"""
@@ -316,7 +311,11 @@ class MetricsDashboard:
             # 获取数据
             metrics = self.get_performance_metrics()
             recent_activity = self.get_recent_activity(24)
-            daily_df = self.get_daily_stats_dataframe(7)
+            daily_data = self.get_daily_stats(7)
+            
+            if not daily_data['dates']:
+                st.info("暂无数据可显示，请先使用Agent进行一些对话")
+                return
             
             # KPI 指标卡片
             st.subheader("📈 关键性能指标")
@@ -353,92 +352,88 @@ class MetricsDashboard:
             # 图表区域
             st.subheader("📊 趋势分析")
             
-            tab1, tab2, tab3 = st.tabs(["API性能", "使用情况", "详细数据"])
+            # API性能图表
+            fig1 = go.Figure()
+            fig1.add_trace(go.Scatter(
+                x=daily_data['dates'], 
+                y=daily_data['success_rates'],
+                mode='lines+markers',
+                name='API成功率',
+                line=dict(color='#00ff88', width=3)
+            ))
+            fig1.update_layout(
+                title='API 成功率趋势 (7天)',
+                xaxis_title='日期',
+                yaxis_title='成功率 (%)',
+                template='plotly_dark'
+            )
+            st.plotly_chart(fig1, use_container_width=True)
             
-            with tab1:
-                if not daily_df.empty:
-                    # API性能图表
-                    fig1 = go.Figure()
-                    fig1.add_trace(go.Scatter(
-                        x=daily_df['日期'], 
-                        y=daily_df['成功率 (%)'],
-                        mode='lines+markers',
-                        name='API成功率',
-                        line=dict(color='#00ff88', width=3)
-                    ))
-                    fig1.update_layout(
-                        title='API 成功率趋势 (7天)',
-                        xaxis_title='日期',
-                        yaxis_title='成功率 (%)',
-                        template='plotly_dark'
-                    )
-                    st.plotly_chart(fig1, use_container_width=True)
-                    
-                    # 响应时间图表
-                    fig2 = go.Figure()
-                    fig2.add_trace(go.Scatter(
-                        x=daily_df['日期'], 
-                        y=daily_df['平均响应时间 (s)'],
-                        mode='lines+markers',
-                        name='平均响应时间',
-                        line=dict(color='#ffaa00', width=3)
-                    ))
-                    fig2.update_layout(
-                        title='平均响应时间趋势 (7天)',
-                        xaxis_title='日期',
-                        yaxis_title='响应时间 (秒)',
-                        template='plotly_dark'
-                    )
-                    st.plotly_chart(fig2, use_container_width=True)
-                else:
-                    st.info("暂无数据可显示")
+            # 响应时间图表
+            fig2 = go.Figure()
+            fig2.add_trace(go.Scatter(
+                x=daily_data['dates'], 
+                y=daily_data['avg_response_times'],
+                mode='lines+markers',
+                name='平均响应时间',
+                line=dict(color='#ffaa00', width=3)
+            ))
+            fig2.update_layout(
+                title='平均响应时间趋势 (7天)',
+                xaxis_title='日期',
+                yaxis_title='响应时间 (秒)',
+                template='plotly_dark'
+            )
+            st.plotly_chart(fig2, use_container_width=True)
             
-            with tab2:
-                if not daily_df.empty:
-                    col1, col2 = st.columns(2)
-                    
+            # 使用情况图表
+            col1, col2 = st.columns(2)
+            
+            with col1:
+                # API调用量柱状图
+                fig3 = go.Figure()
+                fig3.add_trace(go.Bar(
+                    x=daily_data['dates'], 
+                    y=daily_data['api_calls'],
+                    name='API调用量',
+                    marker_color='#636efa'
+                ))
+                fig3.update_layout(
+                    title='每日API调用量',
+                    xaxis_title='日期',
+                    yaxis_title='调用次数'
+                )
+                st.plotly_chart(fig3, use_container_width=True)
+            
+            with col2:
+                # 会话数图表
+                fig4 = go.Figure()
+                fig4.add_trace(go.Bar(
+                    x=daily_data['dates'],
+                    y=daily_data['sessions'],
+                    name='用户会话数',
+                    marker_color='#ef553b'
+                ))
+                fig4.update_layout(
+                    title='每日用户会话数',
+                    xaxis_title='日期',
+                    yaxis_title='会话数'
+                )
+                st.plotly_chart(fig4, use_container_width=True)
+            
+            # 详细数据
+            st.subheader("📋 详细统计数据")
+            for i in range(len(daily_data['dates'])):
+                with st.expander(f"日期: {daily_data['dates'][i]}"):
+                    col1, col2, col3, col4 = st.columns(4)
                     with col1:
-                        # API调用量柱状图
-                        fig3 = px.bar(
-                            daily_df, 
-                            x='日期', 
-                            y='API调用次数',
-                            title='每日API调用量',
-                            color='API调用次数',
-                            color_continuous_scale='viridis'
-                        )
-                        st.plotly_chart(fig3, use_container_width=True)
-                    
+                        st.metric("API调用", daily_data['api_calls'][i])
                     with col2:
-                        # 会话数图表
-                        fig4 = px.bar(
-                            daily_df,
-                            x='日期',
-                            y='会话数',
-                            title='每日用户会话数',
-                            color='会话数',
-                            color_continuous_scale='plasma'
-                        )
-                        st.plotly_chart(fig4, use_container_width=True)
-                else:
-                    st.info("暂无数据可显示")
-            
-            with tab3:
-                # 详细数据表格
-                st.subheader("详细统计数据")
-                if not daily_df.empty:
-                    st.dataframe(daily_df, use_container_width=True)
-                    
-                    # 数据导出
-                    csv = daily_df.to_csv(index=False).encode('utf-8')
-                    st.download_button(
-                        "📥 导出CSV数据",
-                        csv,
-                        f"agent_metrics_{datetime.now().strftime('%Y%m%d')}.csv",
-                        "text/csv"
-                    )
-                else:
-                    st.info("暂无数据可导出")
+                        st.metric("成功率", f"{daily_data['success_rates'][i]:.1f}%")
+                    with col3:
+                        st.metric("响应时间", f"{daily_data['avg_response_times'][i]:.2f}s")
+                    with col4:
+                        st.metric("会话数", daily_data['sessions'][i])
             
             # 系统状态
             st.subheader("🔧 系统状态")
@@ -485,7 +480,7 @@ class MetricsDashboard:
             
         except Exception as e:
             st.error(f"显示数据面板时出错: {e}")
-            st.info("请检查数据文件是否完整，或尝试重新初始化数据文件")
+            st.info("请检查数据文件是否完整")
 
 def main():
     """数据面板主函数"""

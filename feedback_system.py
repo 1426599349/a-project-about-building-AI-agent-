@@ -1,14 +1,11 @@
-# feedback_system.py - 独立反馈系统模块
 import json
 import os
 import uuid
 from datetime import datetime
-from metrics_dashboard import MetricsDashboard
 
 class FeedbackSystem:
     def __init__(self, data_file="data/feedback.json"):
         self.data_file = data_file
-        self.metrics_dashboard = MetricsDashboard()  # 数据监控
         self.ensure_data_file()
     
     def ensure_data_file(self):
@@ -33,16 +30,22 @@ class FeedbackSystem:
         try:
             with open(self.data_file, 'r', encoding='utf-8') as f:
                 return json.load(f)
-        except:
-            return {"feedbacks": [], "summary": {"total_feedbacks": 0, "average_rating": 0}}
+        except Exception as e:
+            print(f"加载反馈数据失败: {e}")
+            # 如果文件损坏，重建
+            self.ensure_data_file()
+            return self.load_feedback_data()
     
     def save_feedback_data(self, data):
         """保存反馈数据"""
-        with open(self.data_file, 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
+        try:
+            with open(self.data_file, 'w', encoding='utf-8') as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            print(f"保存反馈数据失败: {e}")
     
     def submit_feedback(self, feedback_data):
-        """提交新反馈 - 集成数据监控"""
+        """提交新反馈"""
         data = self.load_feedback_data()
         
         # 生成反馈ID和时间戳
@@ -59,30 +62,48 @@ class FeedbackSystem:
         data["feedbacks"].append(feedback_record)
         
         # 更新统计信息
-        data["summary"]["total_feedbacks"] = len(data["feedbacks"])
-        
-        if "rating" in feedback_data:
-            ratings = [f["rating"] for f in data["feedbacks"] if "rating" in f]
-            if ratings:
-                data["summary"]["average_rating"] = sum(ratings) / len(ratings)
-        
-        # 分类统计
-        feedback_type = feedback_data.get("type", "general_feedback")
-        if "agent" in feedback_type.lower():
-            data["summary"]["agent_feedback"] = data["summary"].get("agent_feedback", 0) + 1
-        elif feedback_type == "Bug报告":
-            data["summary"]["bug_reports"] = data["summary"].get("bug_reports", 0) + 1
-        elif feedback_type == "功能建议":
-            data["summary"]["feature_requests"] = data["summary"].get("feature_requests", 0) + 1
-        else:
-            data["summary"]["general_feedback"] = data["summary"].get("general_feedback", 0) + 1
+        self.update_summary(data)
         
         self.save_feedback_data(data)
         
-        # 🔥 记录反馈到数据监控
-        self.metrics_dashboard.record_feedback(feedback_data)
-        
         return feedback_id
+    
+    def update_summary(self, data):
+        """更新统计摘要"""
+        total_feedbacks = len(data["feedbacks"])
+        data["summary"]["total_feedbacks"] = total_feedbacks
+        
+        # 计算平均评分
+        ratings = []
+        category_counts = {
+            "agent_feedback": 0,
+            "general_feedback": 0,
+            "bug_reports": 0,
+            "feature_requests": 0
+        }
+        
+        for fb in data["feedbacks"]:
+            if "rating" in fb:
+                ratings.append(fb["rating"])
+            
+            # 分类统计
+            fb_type = fb.get("type", "").lower()
+            if "agent" in fb_type:
+                category_counts["agent_feedback"] += 1
+            elif fb_type == "bug报告" or "bug" in fb_type:
+                category_counts["bug_reports"] += 1
+            elif fb_type == "功能建议" or "feature" in fb_type:
+                category_counts["feature_requests"] += 1
+            else:
+                category_counts["general_feedback"] += 1
+        
+        # 更新平均评分
+        if ratings:
+            data["summary"]["average_rating"] = sum(ratings) / len(ratings)
+        
+        # 更新分类统计
+        for key, value in category_counts.items():
+            data["summary"][key] = value
     
     def get_feedback_stats(self):
         """获取反馈统计"""
@@ -92,20 +113,35 @@ class FeedbackSystem:
     def get_recent_feedbacks(self, limit=10):
         """获取最近反馈"""
         data = self.load_feedback_data()
-        return data["feedbacks"][-limit:]
+        # 按时间戳排序（最新的在前）
+        feedbacks = sorted(data["feedbacks"], 
+                          key=lambda x: x.get("timestamp", ""), 
+                          reverse=True)
+        return feedbacks[:limit]
+    
+    def get_all_feedbacks(self):
+        """获取所有反馈"""
+        data = self.load_feedback_data()
+        return sorted(data["feedbacks"], 
+                     key=lambda x: x.get("timestamp", ""), 
+                     reverse=True)
     
     def get_feedback_by_id(self, feedback_id):
         """根据ID获取反馈"""
         data = self.load_feedback_data()
         for feedback in data["feedbacks"]:
-            if feedback["id"] == feedback_id:
+            if feedback.get("id") == feedback_id:
                 return feedback
         return None
     
     def get_feedbacks_by_type(self, feedback_type):
         """根据类型获取反馈"""
         data = self.load_feedback_data()
-        return [fb for fb in data["feedbacks"] if fb.get("type") == feedback_type]
+        results = []
+        for fb in data["feedbacks"]:
+            if fb.get("type", "").lower() == feedback_type.lower():
+                results.append(fb)
+        return results
     
     def get_average_rating(self):
         """获取平均评分"""
@@ -122,35 +158,38 @@ class FeedbackSystem:
         
         for feedback in data["feedbacks"]:
             if "rating" in feedback:
-                rating = feedback["rating"]
+                rating = int(feedback["rating"])
                 if rating in distribution:
                     distribution[rating] += 1
         
         return distribution
+    
+    def clear_all_feedbacks(self):
+        """清空所有反馈（谨慎使用）"""
+        self.ensure_data_file()
+        print("所有反馈已清空")
 
 # 测试函数
-def test_feedback_system():
-    """测试反馈系统"""
-    feedback_system = FeedbackSystem()
-    
-    # 测试提交反馈
-    test_feedback = {
-        "type": "Agent使用体验",
-        "rating": 5,
-        "content": "测试反馈内容",
-        "contact": "test@example.com"
-    }
-    
-    feedback_id = feedback_system.submit_feedback(test_feedback)
-    print(f"✅ 反馈提交成功! ID: {feedback_id}")
-    
-    # 测试获取统计
-    stats = feedback_system.get_feedback_stats()
-    print(f"📊 反馈统计: {stats}")
-    
-    # 测试获取平均评分
-    avg_rating = feedback_system.get_average_rating()
-    print(f"⭐ 平均评分: {avg_rating}")
-
 if __name__ == "__main__":
-    test_feedback_system()
+    fs = FeedbackSystem()
+    
+    # 测试数据
+    test_feedbacks = [
+        {"type": "Agent使用体验", "rating": 5, "content": "非常好用，建议很专业", "contact": "user1@example.com"},
+        {"type": "Bug报告", "rating": 2, "content": "偶尔会超时", "contact": "user2@example.com"},
+        {"type": "功能建议", "rating": 4, "content": "希望能添加简历模板", "contact": "user3@example.com"},
+        {"type": "一般反馈", "rating": 5, "content": "界面很美观", "contact": ""}
+    ]
+    
+    for fb in test_feedbacks:
+        fs.submit_feedback(fb)
+    
+    # 显示统计
+    stats = fs.get_feedback_stats()
+    print("📊 反馈统计:", stats)
+    
+    # 显示最近反馈
+    recent = fs.get_recent_feedbacks(3)
+    print("\n📋 最近反馈:")
+    for fb in recent:
+        print(f"  - {fb['type']}: {fb['content'][:30]}...")
