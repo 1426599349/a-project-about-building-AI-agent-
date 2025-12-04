@@ -1,0 +1,56 @@
+﻿# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+
+# 环境变量和密钥
+.env
+.env.local
+.env.*.local
+secrets.txt
+
+# 数据文件和日志
+data/
+*.db
+*.sqlite
+*.sqlite3
+*.log
+logs/
+*.csv
+*.json
+
+# 系统文件
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE和编辑器
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-*
+
+# 临时文件
+tmp/
+temp/
+*.tmp
+*.bak
+
+# 测试文件
+test_*.py
+*_test.py
+
+# Streamlit
+.streamlit/
+
+# 其他
+agent_ui_smart.py
+test_simple.py
