@@ -1,281 +1,545 @@
-# admin_dashboard.py - 简化版（不依赖pyarrow）
+# admin_dashboard.py - 反馈查看后台
 import streamlit as st
-from metrics_dashboard import MetricsDashboard
-from feedback_system import FeedbackSystem
-from datetime import datetime
+import pandas as pd
 import json
+import os
+from datetime import datetime
+from feedback_system import FeedbackSystem
 
 def main():
-    """后台数据面板主函数"""
     st.set_page_config(
-        page_title="Agent 数据监控后台",
+        page_title="AI职业规划师 - 后台管理系统",
         page_icon="📊",
         layout="wide"
     )
     
-    # 添加密码保护
-    password = st.sidebar.text_input("管理员密码", type="password", key="admin_pwd")
+    # 登录验证
+    if not authenticate():
+        return
     
-    if password == "315315zjh":
-        dashboard = MetricsDashboard()
-        feedback_system = FeedbackSystem()
-        
-        # 顶部导航
-        st.sidebar.title("📊 导航")
-        tab = st.sidebar.radio(
-            "选择功能",
-            ["📈 性能监控", "💬 用户反馈", "📊 系统分析"]
-        )
-        
-        if tab == "📈 性能监控":
-            show_performance_dashboard(dashboard)
-        elif tab == "💬 用户反馈":
-            show_feedback_dashboard(feedback_system)
-        elif tab == "📊 系统分析":
-            show_system_analysis(dashboard, feedback_system)
-        
-    else:
-        if password:
-            st.error("密码错误！")
-        
-        st.title("🔒 Agent 数据监控后台")
-        st.warning("请输入管理员密码访问数据面板")
+    # 初始化反馈系统
+    feedback_system = FeedbackSystem()
+    
+    # 侧边栏导航
+    st.sidebar.title("📊 导航")
+    page = st.sidebar.radio("选择页面", ["📈 数据概览", "📋 反馈详情", "⚙️ 系统管理"])
+    
+    if page == "📈 数据概览":
+        show_overview(feedback_system)
+    elif page == "📋 反馈详情":
+        show_feedback_details(feedback_system)
+    elif page == "⚙️ 系统管理":
+        show_system_management(feedback_system)
 
-def show_performance_dashboard(dashboard):
-    """显示性能监控面板"""
-    dashboard.show_dashboard()
+def authenticate():
+    """用户认证"""
+    if 'authenticated' not in st.session_state:
+        st.session_state.authenticated = False
+    
+    if not st.session_state.authenticated:
+        # 登录界面
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            st.title("🔒 后台管理系统")
+            
+            with st.form("login_form"):
+                username = st.text_input("用户名")
+                password = st.text_input("密码", type="password")
+                submitted = st.form_submit_button("登录")
+                
+                if submitted:
+                    if username == "zjh" and password == "315315zjh":  # 可修改密码
+                        st.session_state.authenticated = True
+                        st.success("登录成功！")
+                        st.rerun()
+                    else:
+                        st.error("用户名或密码错误")
+            return False
+    
+    return True
 
-def show_feedback_dashboard(feedback_system):
-    """显示用户反馈面板"""
-    st.title("💬 用户反馈分析")
-    st.markdown("查看用户的反馈和建议，了解系统改进方向")
+def show_overview(feedback_system):
+    """显示数据概览"""
+    st.title("📈 数据概览")
     
     try:
-        # 获取反馈统计
-        feedback_stats = feedback_system.get_feedback_stats()
+        # 获取统计数据
+        stats = feedback_system.get_feedback_stats()
         
-        # KPI 指标
+        # 关键指标
+        st.markdown("### 📊 关键指标")
         col1, col2, col3, col4 = st.columns(4)
         
         with col1:
-            st.metric("总反馈数", feedback_stats.get("total_feedbacks", 0))
+            st.metric("总反馈数", stats.get("total_feedbacks", 0))
         
         with col2:
-            avg_rating = feedback_stats.get("average_rating", 0)
+            avg_rating = stats.get("average_rating", 0)
             st.metric("平均评分", f"{avg_rating:.1f}/5")
         
         with col3:
-            agent_feedback = feedback_stats.get("agent_feedback", 0)
-            st.metric("Agent反馈", agent_feedback)
+            suggestions = stats.get("suggestion", 0)
+            st.metric("功能建议", suggestions)
         
         with col4:
-            bug_reports = feedback_stats.get("bug_reports", 0)
-            st.metric("Bug报告", bug_reports)
+            bug_reports = stats.get("bug_report", 0)
+            st.metric("问题报告", bug_reports)
         
-        st.divider()
+        # 获取最近反馈
+        st.markdown("### 📋 最近反馈")
+        recent_feedbacks = feedback_system.get_recent_feedbacks(5)
         
+        if recent_feedbacks:
+            for fb in recent_feedbacks:
+                with st.expander(f"📄 {fb.get('type', '未知')} - {fb.get('timestamp', '')[:10]}", expanded=False):
+                    show_feedback_card(fb)
+        else:
+            st.info("暂无反馈记录")
+        
+        # 评分分布
+        st.markdown("### ⭐ 评分分布")
+        rating_dist = feedback_system.get_rating_distribution()
+        
+        if any(rating_dist.values()):
+            # 显示分布图
+            import plotly.graph_objects as go
+            
+            ratings = list(rating_dist.keys())
+            counts = list(rating_dist.values())
+            
+            fig = go.Figure(data=[
+                go.Bar(
+                    x=[f"{r}星" for r in ratings],
+                    y=counts,
+                    marker_color=['#ff4444', '#ff8844', '#ffcc44', '#88cc44', '#44aa44'],
+                    text=counts,
+                    textposition='auto'
+                )
+            ])
+            
+            fig.update_layout(
+                title='用户评分分布',
+                xaxis_title='评分',
+                yaxis_title='数量',
+                template='plotly_white',
+                height=400
+            )
+            
+            st.plotly_chart(fig, use_container_width=True)
+            
+            # 表格显示详细数据
+            total = sum(counts)
+            if total > 0:
+                st.markdown("**详细数据:**")
+                dist_data = []
+                for rating, count in rating_dist.items():
+                    if count > 0:
+                        percentage = (count / total) * 100
+                        dist_data.append({
+                            "评分": f"{rating} 星",
+                            "数量": count,
+                            "百分比": f"{percentage:.1f}%"
+                        })
+                
+                if dist_data:
+                    st.dataframe(dist_data, use_container_width=True)
+        
+        # 反馈类型分布
+        st.markdown("### 📊 反馈类型分布")
+        
+        try:
+            all_feedbacks = feedback_system.get_all_feedbacks()
+            
+            type_data = {
+                "使用体验": stats.get("usage_feedback", 0),
+                "功能建议": stats.get("suggestion", 0),
+                "问题报告": stats.get("bug_report", 0),
+                "其他": stats.get("other", 0)
+            }
+            
+            # 创建饼图
+            import plotly.graph_objects as go
+            
+            labels = list(type_data.keys())
+            values = list(type_data.values())
+            
+            # 只显示有数据的类型
+            filtered_labels = []
+            filtered_values = []
+            for label, value in zip(labels, values):
+                if value > 0:
+                    filtered_labels.append(label)
+                    filtered_values.append(value)
+            
+            if filtered_values:
+                fig = go.Figure(data=[go.Pie(
+                    labels=filtered_labels,
+                    values=filtered_values,
+                    hole=.3,
+                    marker_colors=['#667eea', '#764ba2', '#f093fb', '#4facfe']
+                )])
+                
+                fig.update_layout(
+                    title='反馈类型分布',
+                    height=400
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.info("暂无反馈数据")
+                
+        except Exception as e:
+            st.error(f"生成类型分布图失败: {e}")
+    
+    except Exception as e:
+        st.error(f"加载数据概览失败: {e}")
+
+def show_feedback_details(feedback_system):
+    """显示反馈详情"""
+    st.title("📋 反馈详情")
+    
+    try:
         # 获取所有反馈
         all_feedbacks = feedback_system.get_all_feedbacks()
         
-        if all_feedbacks:
-            st.subheader(f"📋 所有反馈记录 (共{len(all_feedbacks)}条)")
-            
-            # 搜索和筛选
-            col1, col2 = st.columns([2, 1])
-            with col1:
-                search_term = st.text_input("🔍 搜索反馈内容", "")
-            with col2:
-                st.write("")
-                show_all = st.checkbox("显示全部", True)
-            
-            # 显示反馈列表
-            for i, fb in enumerate(all_feedbacks):
-                # 如果搜索关键词不为空，检查是否匹配
-                if search_term and search_term.lower() not in fb.get("content", "").lower():
-                    continue
-                
-                # 格式化时间
-                timestamp = fb.get("timestamp", "")
-                if timestamp:
-                    try:
-                        dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
-                        display_time = dt.strftime("%Y-%m-%d %H:%M:%S")
-                    except:
-                        display_time = timestamp
-                else:
-                    display_time = "未知时间"
-                
-                # 创建可折叠的反馈卡片
-                with st.expander(f"📄 {display_time} - {fb.get('type', '未知类型')}", expanded=(i==0 and not search_term)):
-                    col1, col2 = st.columns([1, 2])
-                    
-                    with col1:
-                        st.markdown(f"**反馈ID:** {fb.get('id', 'N/A')}")
-                        st.markdown(f"**类型:** {fb.get('type', '未知')}")
-                        
-                        rating = fb.get('rating')
-                        if rating:
-                            stars = "⭐" * int(rating)
-                            st.markdown(f"**评分:** {stars} ({rating}/5)")
-                        else:
-                            st.markdown("**评分:** 未评分")
-                        
-                        contact = fb.get('contact', '')
-                        if contact:
-                            st.markdown(f"**联系方式:** {contact}")
-                    
-                    with col2:
-                        content = fb.get('content', '无内容')
-                        st.markdown("**反馈内容:**")
-                        st.write(content)
-            
-            st.divider()
-            
-            # 评分分布
-            st.subheader("📊 评分分布")
-            rating_dist = feedback_system.get_rating_distribution()
-            
-            if any(rating_dist.values()):
-                # 使用Streamlit原生图表
-                ratings = list(rating_dist.keys())
-                counts = list(rating_dist.values())
-                
-                # 显示表格
-                rating_data = []
-                for rating, count in rating_dist.items():
-                    if count > 0:
-                        rating_data.append({
-                            "评分": rating,
-                            "数量": count,
-                            "百分比": f"{(count/sum(counts))*100:.1f}%"
-                        })
-                
-                if rating_data:
-                    # 显示表格
-                    for item in rating_data:
-                        cols = st.columns([1, 2, 1])
-                        with cols[0]:
-                            st.markdown(f"**{item['评分']} 星**")
-                        with cols[1]:
-                            progress = item['数量'] / max(counts) if max(counts) > 0 else 0
-                            st.progress(progress)
-                        with cols[2]:
-                            st.markdown(f"{item['数量']} 条 ({item['百分比']})")
-            
-            # 导出功能（使用JSON格式）
-            st.divider()
-            st.subheader("📥 数据导出")
-            
-            if st.button("导出反馈数据 (JSON)"):
-                export_data = {
-                    "export_time": datetime.now().isoformat(),
-                    "total_feedbacks": len(all_feedbacks),
-                    "feedbacks": all_feedbacks
-                }
-                
-                json_str = json.dumps(export_data, ensure_ascii=False, indent=2)
-                st.download_button(
-                    label="下载JSON文件",
-                    data=json_str,
-                    file_name=f"feedback_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
-                    mime="application/json"
-                )
-                
-        else:
-            st.info("暂无用户反馈，鼓励用户提供反馈来改进系统！")
-            
-    except Exception as e:
-        st.error(f"加载反馈数据失败: {e}")
-        st.info("请确保反馈系统正常运行")
-
-def show_system_analysis(dashboard, feedback_system):
-    """显示系统综合分析"""
-    st.title("📊 系统综合分析")
-    
-    try:
-        # 获取数据
-        metrics = dashboard.get_performance_metrics()
-        feedback_stats = feedback_system.get_feedback_stats()
+        if not all_feedbacks:
+            st.info("暂无用户反馈记录")
+            return
         
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            # 系统健康度
-            success_rate = metrics.get('success_rate', 0)
-            
-            if success_rate >= 95:
-                health_status = "🟢 优秀"
-            elif success_rate >= 85:
-                health_status = "🟡 良好"
-            else:
-                health_status = "🔴 需关注"
-            
-            st.info(f"**系统健康度**: {health_status}")
-            st.progress(success_rate / 100, text=f"API成功率: {success_rate}%")
-        
-        with col2:
-            # 用户满意度
-            avg_rating = feedback_stats.get('average_rating', 0)
-            
-            if avg_rating >= 4.5:
-                satisfaction = "🟢 非常满意"
-            elif avg_rating >= 4.0:
-                satisfaction = "🟡 满意"
-            elif avg_rating >= 3.0:
-                satisfaction = "🟠 一般"
-            else:
-                satisfaction = "🔴 需改进"
-            
-            st.info(f"**用户满意度**: {satisfaction}")
-            st.progress(avg_rating / 5, text=f"平均评分: {avg_rating:.1f}/5")
-        
-        st.divider()
-        
-        # 数据汇总
-        st.subheader("📈 数据汇总")
+        # 搜索和筛选
+        st.markdown("### 🔍 搜索与筛选")
         
         col1, col2, col3 = st.columns(3)
         
         with col1:
-            st.metric("API总调用", metrics.get('total_api_calls', 0))
-            st.metric("成功调用", metrics.get('successful_calls', 0))
+            search_term = st.text_input("搜索关键词")
         
         with col2:
-            st.metric("用户会话", metrics.get('total_sessions', 0))
-            st.metric("平均响应时间", f"{metrics.get('average_response_time', 0):.2f}s")
+            # 获取所有类型
+            all_types = ["全部", "使用体验", "功能建议", "问题报告", "其他"]
+            filter_type = st.selectbox("反馈类型", all_types)
         
         with col3:
-            st.metric("用户反馈", feedback_stats.get('total_feedbacks', 0))
-            st.metric("Bug报告", feedback_stats.get('bug_reports', 0))
+            min_rating = st.selectbox("最低评分", ["全部", "1星+", "2星+", "3星+", "4星+", "5星"])
         
-        st.divider()
-        
-        # 改进建议
-        st.subheader("💡 改进建议")
-        
-        suggestions = []
-        
-        if metrics.get('success_rate', 0) < 85:
-            suggestions.append("优化API调用逻辑，提高成功率")
-        
-        if metrics.get('average_response_time', 0) > 5:
-            suggestions.append("检查网络连接，优化响应时间")
-        
-        if feedback_stats.get('bug_reports', 0) > 0:
-            suggestions.append("优先处理用户报告的Bug问题")
-        
-        if feedback_stats.get('total_feedbacks', 0) < 5:
-            suggestions.append("增加反馈入口，收集更多用户意见")
-        
-        if suggestions:
-            st.info("基于当前数据，建议：")
-            for i, suggestion in enumerate(suggestions, 1):
-                st.write(f"{i}. {suggestion}")
-        else:
-            st.success("✅ 系统运行状况良好，继续保持！")
+        # 应用筛选
+        filtered_feedbacks = []
+        for fb in all_feedbacks:
+            # 搜索过滤
+            if search_term:
+                if search_term.lower() not in fb.get("content", "").lower():
+                    continue
             
+            # 类型过滤
+            if filter_type != "全部" and fb.get("type", "") != filter_type:
+                continue
+            
+            # 评分过滤
+            if min_rating != "全部":
+                min_stars = int(min_rating[0])
+                fb_rating = fb.get("rating", 0)
+                if fb_rating < min_stars:
+                    continue
+            
+            filtered_feedbacks.append(fb)
+        
+        # 显示统计
+        st.info(f"📊 找到 {len(filtered_feedbacks)} 条反馈（共 {len(all_feedbacks)} 条）")
+        
+        # 批量操作
+        col1, col2, col3 = st.columns([1, 1, 2])
+        with col1:
+            if st.button("🔄 刷新数据", use_container_width=True):
+                st.rerun()
+        
+        with col2:
+            if st.button("📥 导出数据", use_container_width=True):
+                export_data(filtered_feedbacks)
+        
+        # 分页显示
+        items_per_page = 10
+        total_pages = max(1, (len(filtered_feedbacks) + items_per_page - 1) // items_per_page)
+        
+        if 'current_page' not in st.session_state:
+            st.session_state.current_page = 1
+        
+        # 分页控制
+        if total_pages > 1:
+            page_cols = st.columns([2, 1, 2])
+            with page_cols[0]:
+                page_num = st.number_input("页码", min_value=1, max_value=total_pages, 
+                                         value=st.session_state.current_page)
+                st.session_state.current_page = page_num
+            with page_cols[2]:
+                st.caption(f"共 {total_pages} 页")
+        
+        # 计算当前页数据
+        start_idx = (st.session_state.current_page - 1) * items_per_page
+        end_idx = start_idx + items_per_page
+        page_feedbacks = filtered_feedbacks[start_idx:end_idx]
+        
+        # 显示反馈列表
+        st.markdown(f"### 📄 反馈列表（第 {st.session_state.current_page} 页）")
+        
+        for i, fb in enumerate(page_feedbacks):
+            with st.expander(f"#{start_idx + i + 1} {fb.get('type', '未知')} - {fb.get('timestamp', '')[:10]}", expanded=False):
+                show_feedback_detail(fb)
+        
+        # 如果没有数据
+        if not page_feedbacks:
+            st.warning("没有找到匹配的反馈记录")
+    
     except Exception as e:
-        st.error(f"系统分析失败: {e}")
+        st.error(f"加载反馈详情失败: {e}")
+
+def show_feedback_card(fb):
+    """显示反馈卡片（简略版）"""
+    col1, col2 = st.columns([1, 3])
+    
+    with col1:
+        # 基本信息
+        st.markdown(f"**ID:** `{fb.get('id', 'N/A')}`")
+        
+        rating = fb.get('rating', 0)
+        stars = "⭐" * rating if rating > 0 else "未评分"
+        st.markdown(f"**评分:** {stars}")
+        
+        contact = fb.get('contact', '')
+        if contact:
+            st.markdown(f"**联系方式:**")
+            st.code(contact)
+    
+    with col2:
+        # 内容预览
+        content = fb.get('content', '')
+        preview = content[:200] + "..." if len(content) > 200 else content
+        
+        st.markdown("**反馈内容:**")
+        st.markdown(f"""
+        <div style='
+            background: #f8f9fa;
+            padding: 0.5rem;
+            border-radius: 5px;
+            border-left: 3px solid #667eea;
+            margin: 0.5rem 0;
+        '>
+            {preview}
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # 时间信息
+        timestamp = fb.get("timestamp", "")
+        if timestamp:
+            try:
+                dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                st.caption(f"提交时间: {dt.strftime('%Y-%m-%d %H:%M:%S')}")
+            except:
+                st.caption(f"提交时间: {timestamp}")
+
+def show_feedback_detail(fb):
+    """显示反馈详情（详细版）"""
+    col1, col2 = st.columns([1, 2])
+    
+    with col1:
+        st.markdown("### 📋 基本信息")
+        
+        st.markdown(f"**反馈ID:**")
+        st.code(fb.get('id', 'N/A'), language="text")
+        
+        st.markdown(f"**反馈类型:**")
+        st.info(fb.get('type', '未知'))
+        
+        rating = fb.get('rating', 0)
+        stars = "⭐" * rating if rating > 0 else "未评分"
+        st.markdown(f"**用户评分:**")
+        st.markdown(f"<h3>{stars}</h3>", unsafe_allow_html=True)
+        
+        contact = fb.get('contact', '')
+        if contact:
+            st.markdown(f"**联系方式:**")
+            st.code(contact, language="text")
+        
+        # 时间信息
+        timestamp = fb.get("timestamp", "")
+        if timestamp:
+            try:
+                dt = datetime.fromisoformat(timestamp.replace('Z', '+00:00'))
+                st.markdown(f"**提交时间:**")
+                st.markdown(f"{dt.strftime('%Y-%m-%d %H:%M:%S')}")
+                
+                # 计算时间差
+                time_diff = datetime.now() - dt
+                if time_diff.days > 0:
+                    time_ago = f"{time_diff.days} 天前"
+                elif time_diff.seconds > 3600:
+                    time_ago = f"{time_diff.seconds // 3600} 小时前"
+                elif time_diff.seconds > 60:
+                    time_ago = f"{time_diff.seconds // 60} 分钟前"
+                else:
+                    time_ago = "刚刚"
+                st.caption(f"（{time_ago}）")
+            except:
+                st.markdown(f"**提交时间:** {timestamp}")
+    
+    with col2:
+        st.markdown("### 📝 反馈内容")
+        
+        content = fb.get('content', '')
+        
+        st.markdown(f"""
+        <div style='
+            background: #f8f9fa;
+            padding: 1.5rem;
+            border-radius: 10px;
+            border: 1px solid #dee2e6;
+            min-height: 200px;
+            white-space: pre-wrap;
+            line-height: 1.6;
+        '>
+            {content}
+        </div>
+        """, unsafe_allow_html=True)
+        
+        # 内容统计
+        st.markdown("---")
+        content_length = len(content)
+        word_count = len(content.split())
+        char_count = len(content.replace(' ', ''))
+        
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("总字数", content_length)
+        with col2:
+            st.metric("词数", word_count)
+        with col3:
+            st.metric("字符数", char_count)
+        
+        # 操作按钮
+        st.markdown("---")
+        col1, col2 = st.columns(2)
+        with col1:
+            if st.button("📋 复制内容", key=f"copy_{fb.get('id')}", use_container_width=True):
+                st.code(content, language="text")
+                st.success("内容已复制到剪贴板")
+        
+        with col2:
+            if st.button("🗑️ 删除反馈", key=f"delete_{fb.get('id')}", use_container_width=True, type="secondary"):
+                st.warning("此操作不可恢复！")
+                confirm = st.checkbox("确认删除", key=f"confirm_{fb.get('id')}")
+                if confirm:
+                    # 这里需要实现删除逻辑
+                    st.error("删除功能需要数据库支持")
+
+def export_data(feedbacks):
+    """导出数据"""
+    if not feedbacks:
+        st.warning("没有数据可导出")
+        return
+    
+    # 创建导出数据
+    export_data = {
+        "export_time": datetime.now().isoformat(),
+        "total_feedbacks": len(feedbacks),
+        "feedbacks": feedbacks
+    }
+    
+    # 转换为JSON
+    json_str = json.dumps(export_data, ensure_ascii=False, indent=2)
+    
+    # 提供下载
+    st.download_button(
+        label="📥 下载JSON文件",
+        data=json_str,
+        file_name=f"feedback_export_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+        mime="application/json"
+    )
+
+def show_system_management(feedback_system):
+    """显示系统管理"""
+    st.title("⚙️ 系统管理")
+    
+    st.markdown("### 📊 数据统计")
+    
+    try:
+        stats = feedback_system.get_feedback_stats()
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            st.markdown("#### 基础统计")
+            for key, value in stats.items():
+                st.markdown(f"**{key}:** {value}")
+        
+        with col2:
+            st.markdown("#### 系统信息")
+            
+            # 检查数据文件
+            data_file = "data/feedback.json"
+            if os.path.exists(data_file):
+                file_size = os.path.getsize(data_file)
+                file_time = datetime.fromtimestamp(os.path.getmtime(data_file))
+                
+                st.info(f"""
+                **数据文件信息:**
+                - 路径: `{data_file}`
+                - 大小: {file_size:,} 字节
+                - 修改时间: {file_time.strftime('%Y-%m-%d %H:%M:%S')}
+                """)
+            else:
+                st.warning("数据文件不存在")
+    
+    except Exception as e:
+        st.error(f"获取系统信息失败: {e}")
+    
+    st.markdown("### ⚠️ 危险操作")
+    
+    with st.expander("数据管理", expanded=False):
+        st.warning("⚠️ 以下操作不可恢复，请谨慎操作！")
+        
+        col1, col2 = st.columns(2)
+        
+        with col1:
+            if st.button("🔄 重新加载数据", type="secondary", use_container_width=True):
+                st.rerun()
+        
+        with col2:
+            if st.button("🗑️ 清空所有数据", type="secondary", use_container_width=True):
+                confirm = st.checkbox("我确认要清空所有数据")
+                confirm2 = st.checkbox("我知道此操作不可恢复")
+                
+                if confirm and confirm2:
+                    try:
+                        # 创建备份
+                        backup_file = f"data/feedback_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.json"
+                        if os.path.exists("data/feedback.json"):
+                            import shutil
+                            shutil.copy2("data/feedback.json", backup_file)
+                            st.info(f"已创建备份: {backup_file}")
+                        
+                        # 清空数据
+                        feedback_system = FeedbackSystem()
+                        initial_data = {
+                            "feedbacks": [],
+                            "summary": {
+                                "total_feedbacks": 0,
+                                "average_rating": 0,
+                                "usage_feedback": 0,
+                                "suggestion": 0,
+                                "bug_report": 0,
+                                "other": 0
+                            }
+                        }
+                        
+                        import json
+                        with open("data/feedback.json", 'w', encoding='utf-8') as f:
+                            json.dump(initial_data, f, ensure_ascii=False, indent=2)
+                        
+                        st.success("✅ 所有数据已清空")
+                        time.sleep(2)
+                        st.rerun()
+                        
+                    except Exception as e:
+                        st.error(f"清空数据失败: {e}")
 
 if __name__ == "__main__":
     main()

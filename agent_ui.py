@@ -1,8 +1,9 @@
-# agent_ui.py - 最终简洁版（纯前端）
+# agent_ui.py - 简化反馈入口版
 import streamlit as st
 import os
 import sys
 import time
+from datetime import datetime
 
 # 添加当前目录到路径
 sys.path.append(os.path.dirname(os.path.abspath(__file__)))
@@ -11,6 +12,8 @@ sys.path.append(os.path.dirname(os.path.abspath(__file__)))
 try:
     from career_agent import CareerAgent
     from config import get_api_key
+    from feedback_system import FeedbackSystem
+    
     API_KEY = get_api_key()
     
     if not API_KEY:
@@ -27,9 +30,7 @@ except Exception as e:
 # ========== 初始化Session State ==========
 if 'agent' not in st.session_state:
     try:
-        # 初始化Agent（超时设置在agent文件中）
         st.session_state.agent = CareerAgent(API_KEY)
-        st.session_state.agent_active = True
     except Exception as e:
         st.error(f"❌ 创建Agent失败: {e}")
         st.stop()
@@ -37,51 +38,163 @@ if 'agent' not in st.session_state:
 if 'messages' not in st.session_state:
     st.session_state.messages = []
 
+if 'feedback_content' not in st.session_state:
+    st.session_state.feedback_content = ""
+
+# 初始化反馈系统
+feedback_system = FeedbackSystem()
+
 # ========== 页面配置 ==========
 st.set_page_config(
     page_title="AI职业规划师",
     page_icon="🎯",
-    layout="wide",
-    initial_sidebar_state="collapsed"
+    layout="wide"
 )
 
-# ========== 侧边栏（最小化）==========
+# ========== CSS样式 ==========
+st.markdown("""
+<style>
+/* 主标题样式 */
+.main-header {
+    text-align: center;
+    padding: 2rem 1rem;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border-radius: 15px;
+    margin-bottom: 2rem;
+}
+
+/* 卡片样式 */
+.category-card {
+    background: white;
+    border-radius: 10px;
+    padding: 1.5rem;
+    box-shadow: 0 3px 10px rgba(0,0,0,0.08);
+    border-left: 5px solid;
+    height: 100%;
+    margin-bottom: 1rem;
+}
+
+/* 按钮样式 */
+.stButton > button {
+    border-radius: 8px;
+    transition: all 0.2s;
+}
+
+/* 反馈按钮特殊样式 */
+.feedback-btn {
+    background: linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%) !important;
+    color: white !important;
+    border: none !important;
+}
+
+/* 消息样式 */
+.user-message {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+    padding: 12px 16px;
+    border-radius: 18px 18px 0 18px;
+    margin: 8px 0;
+    max-width: 80%;
+    margin-left: auto;
+}
+
+.ai-message {
+    background: #f8f9fa;
+    color: #212529;
+    padding: 12px 16px;
+    border-radius: 18px 18px 18px 0;
+    margin: 8px 0;
+    max-width: 80%;
+    border: 1px solid #e9ecef;
+}
+</style>
+""", unsafe_allow_html=True)
+
+# ========== 侧边栏 ==========
 with st.sidebar:
-    # 设置按钮
-    if st.button("⚙️", help="设置", key="settings_btn"):
-        st.session_state.show_settings = not st.session_state.get('show_settings', False)
+    st.markdown("""
+    <div style='text-align: center; padding: 1rem 0;'>
+        <h3 style='color: #667eea; margin: 0;'>🎯 AI职业规划师</h3>
+        <p style='color: #666; margin: 0; font-size: 0.8rem;'>专业职业咨询助手</p>
+    </div>
+    """, unsafe_allow_html=True)
     
-    if st.session_state.get('show_settings', False):
-        st.divider()
-        
-        # 系统状态
-        if 'agent' in st.session_state:
+    st.divider()
+    
+    # 系统状态
+    if st.session_state.agent:
+        try:
+            status = st.session_state.agent.get_status()
+            st.info(f"**当前模式:** {status['state']}")
+            st.info(f"**对话轮次:** {len(st.session_state.messages)//2}")
+        except:
+            pass
+    
+    st.divider()
+    
+    # 反馈入口
+    st.markdown("### 💬 用户反馈")
+    
+    feedback_content = st.text_area(
+        "请留下您的宝贵意见",
+        placeholder="您的反馈对我们非常重要！\n请告诉我们您的使用体验、建议或遇到的问题...",
+        height=120,
+        key="feedback_text"
+    )
+    
+    col1, col2 = st.columns(2)
+    with col1:
+        rating = st.selectbox("评分", ["⭐⭐⭐⭐⭐", "⭐⭐⭐⭐", "⭐⭐⭐", "⭐⭐", "⭐"], index=0)
+    with col2:
+        feedback_type = st.selectbox("类型", ["使用体验", "功能建议", "问题报告", "其他"])
+    
+    if st.button("📤 提交反馈", type="primary", use_container_width=True):
+        if not feedback_content.strip():
+            st.error("请输入反馈内容")
+        else:
             try:
-                status = st.session_state.agent.get_status()
-                st.info(f"**当前模式**: {status['state']}")
-                st.info(f"**对话轮次**: {len(st.session_state.messages)//2}")
+                # 转换评分
+                rating_map = {"⭐": 1, "⭐⭐": 2, "⭐⭐⭐": 3, "⭐⭐⭐⭐": 4, "⭐⭐⭐⭐⭐": 5}
+                rating_value = rating_map.get(rating, 5)
+                
+                feedback_data = {
+                    "type": feedback_type,
+                    "rating": rating_value,
+                    "content": feedback_content.strip(),
+                    "contact": ""  # 如果需要联系方式，可以添加输入框
+                }
+                
+                feedback_id = feedback_system.submit_feedback(feedback_data)
+                if feedback_id:
+                    st.success(f"✅ 感谢您的反馈！ID: {feedback_id}")
+                    st.session_state.feedback_content = ""
+                    time.sleep(1)
+                    st.rerun()
+                else:
+                    st.error("提交失败，请重试")
+            except Exception as e:
+                st.error(f"提交失败: {str(e)}")
+    
+    st.divider()
+    
+    # 对话管理
+    if st.button("🗑️ 清空对话", use_container_width=True):
+        st.session_state.messages = []
+        if st.session_state.agent:
+            try:
+                st.session_state.agent.clear_conversation()
             except:
                 pass
-        
-        # 清空对话
-        if st.button("🗑️ 清空对话", use_container_width=True):
-            st.session_state.messages = []
-            if 'agent' in st.session_state:
-                try:
-                    st.session_state.agent.clear_conversation()
-                except:
-                    pass
-            st.success("对话已清空")
-            time.sleep(0.5)
-            st.rerun()
-        
-        st.divider()
-        st.caption("💡 提示：点击问题卡片快速开始")
+        st.success("对话已清空")
+        time.sleep(0.5)
+        st.rerun()
+    
+    st.caption("💡 提示：点击下方问题快速开始对话")
 
 # ========== 主界面 ==========
-# 1. 标题区域
+# 标题
 st.markdown("""
-<div style='text-align: center; padding: 2rem 1rem; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); border-radius: 15px; margin-bottom: 2rem;'>
+<div class="main-header">
     <h1 style='color: white; margin: 0; font-size: 3rem;'>🎯 AI职业规划师</h1>
     <p style='color: rgba(255,255,255,0.9); margin: 0.5rem 0 0 0; font-size: 1.2rem;'>
         智能职业发展顾问，为您提供专业的职业规划建议
@@ -89,10 +202,9 @@ st.markdown("""
 </div>
 """, unsafe_allow_html=True)
 
-# 2. 快速问题卡片
+# 快速问题卡片
 st.markdown("### 💡 快速提问")
 
-# 问题分类
 categories = [
     {
         "title": "📄 简历优化",
@@ -132,127 +244,77 @@ categories = [
     }
 ]
 
-# 创建4列
 cols = st.columns(4)
-
 for idx, (col, category) in enumerate(zip(cols, categories)):
     with col:
-        with st.container():
-            st.markdown(f"""
-            <div style='
-                background: white;
-                border-radius: 10px;
-                padding: 1.5rem;
-                box-shadow: 0 4px 12px rgba(0,0,0,0.1);
-                border-left: 5px solid {category['color']};
-                height: 100%;
-                transition: transform 0.2s;
-            '>
-                <h3 style='color: {category['color']}; margin-top: 0;'>{category['title']}</h3>
-            """, unsafe_allow_html=True)
-            
-            for question in category['questions']:
-                if st.button(
-                    f"💬 {question}",
-                    key=f"quick_{idx}_{hash(question)}",
-                    use_container_width=True,
-                    help=f"点击提问"
-                ):
-                    # 直接调用Agent处理
-                    try:
-                        response = st.session_state.agent.passive_chat(question)
-                        st.session_state.messages.append({"role": "user", "content": question})
-                        st.session_state.messages.append({"role": "assistant", "content": response})
-                        st.rerun()
-                    except Exception as e:
-                        st.error(f"提问失败: {str(e)[:100]}")
-            
-            st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown(f"""
+        <div class="category-card" style='border-color: {category["color"]}'>
+            <h4 style='color: {category["color"]}; margin-top: 0;'>{category["title"]}</h4>
+        """, unsafe_allow_html=True)
+        
+        for question in category['questions']:
+            if st.button(
+                f"💬 {question}",
+                key=f"quick_{idx}_{hash(question)}",
+                use_container_width=True
+            ):
+                try:
+                    response = st.session_state.agent.passive_chat(question)
+                    st.session_state.messages.append({"role": "user", "content": question})
+                    st.session_state.messages.append({"role": "assistant", "content": response})
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"提问失败: {str(e)[:100]}")
+        
+        st.markdown("</div>", unsafe_allow_html=True)
 
 st.divider()
 
-# 3. 对话历史
+# 对话历史
 st.markdown("### 💬 对话历史")
 
 if not st.session_state.messages:
     st.info("👋 请在上方选择问题开始对话，或直接在下方输入您的问题")
 else:
-    # 显示对话历史
     for msg in st.session_state.messages:
         if msg["role"] == "user":
             with st.chat_message("user", avatar="👤"):
                 st.markdown(f"""
-                <div style='
-                    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-                    color: white;
-                    padding: 12px 16px;
-                    border-radius: 18px 18px 0 18px;
-                    margin: 8px 0;
-                    max-width: 80%;
-                    margin-left: auto;
-                '>
+                <div class="user-message">
                     {msg["content"]}
                 </div>
                 """, unsafe_allow_html=True)
         else:
             with st.chat_message("assistant", avatar="🤖"):
                 st.markdown(f"""
-                <div style='
-                    background: #f8f9fa;
-                    color: #212529;
-                    padding: 12px 16px;
-                    border-radius: 18px 18px 18px 0;
-                    margin: 8px 0;
-                    max-width: 80%;
-                    border: 1px solid #e9ecef;
-                '>
+                <div class="ai-message">
                     {msg["content"]}
                 </div>
                 """, unsafe_allow_html=True)
 
-# 4. 用户输入
+# 用户输入
 st.markdown("---")
 user_input = st.chat_input("💭 请输入您的问题...")
 
-if user_input and 'agent' in st.session_state:
-    # 显示用户消息
+if user_input and st.session_state.agent:
     with st.chat_message("user", avatar="👤"):
         st.markdown(f"""
-        <div style='
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            color: white;
-            padding: 12px 16px;
-            border-radius: 18px 18px 0 18px;
-            margin: 8px 0;
-            max-width: 80%;
-            margin-left: auto;
-        '>
+        <div class="user-message">
             {user_input}
         </div>
         """, unsafe_allow_html=True)
     
-    # 使用Agent处理
     with st.chat_message("assistant", avatar="🤖"):
         with st.spinner("🤔 AI正在思考..."):
             try:
                 response = st.session_state.agent.passive_chat(user_input)
                 
-                # 显示响应
                 st.markdown(f"""
-                <div style='
-                    background: #f8f9fa;
-                    color: #212529;
-                    padding: 12px 16px;
-                    border-radius: 18px 18px 18px 0;
-                    margin: 8px 0;
-                    max-width: 80%;
-                    border: 1px solid #e9ecef;
-                '>
+                <div class="ai-message">
                     {response}
                 </div>
                 """, unsafe_allow_html=True)
                 
-                # 保存对话
                 st.session_state.messages.append({"role": "user", "content": user_input})
                 st.session_state.messages.append({"role": "assistant", "content": response})
                 
@@ -262,48 +324,15 @@ if user_input and 'agent' in st.session_state:
                 st.session_state.messages.append({"role": "user", "content": user_input})
                 st.session_state.messages.append({"role": "assistant", "content": error_msg})
     
-    # 自动刷新
     time.sleep(0.3)
     st.rerun()
 
-# 5. 页脚
-st.markdown("""
-<div style='
-    text-align: center;
-    padding: 2rem 1rem;
-    color: #6c757d;
-    font-size: 0.9rem;
-    margin-top: 3rem;
-'>
-    <p style='margin: 0.5rem 0; opacity: 0.8;'>
-        🎯 AI职业规划师 · 专业职业咨询助手
-    </p>
-    <p style='margin: 0.5rem 0; font-size: 0.8rem; opacity: 0.6;'>
-        💡 提示：所有AI建议仅供参考，请结合自身情况决策
-    </p>
-</div>
-""", unsafe_allow_html=True)
-
-# 6. 对话反馈（如果有对话）
-if len(st.session_state.messages) >= 2:
-    st.markdown("---")
-    
-    col1, col2 = st.columns([1, 1])
-    with col1:
-        if st.button("👍 有帮助", use_container_width=True):
-            try:
-                feedback_data = {
-                    "type": "对话反馈",
-                    "rating": 5,
-                    "content": "用户表示对话有帮助"
-                }
-                st.session_state.agent.submit_feedback(feedback_data)
-                st.success("感谢反馈！")
-                time.sleep(1)
-                st.rerun()
-            except:
-                st.success("感谢认可！")
-    with col2:
-        if st.button("💡 提建议", use_container_width=True):
-            st.info("感谢您的关注，我们会持续改进！")
-            time.sleep(1)
+# 页面底部
+st.markdown("---")
+col1, col2 = st.columns([3, 1])
+with col1:
+    st.caption("🎯 AI职业规划师 · 专业职业咨询助手")
+    st.caption("💡 提示：所有AI建议仅供参考，请结合自身情况决策")
+with col2:
+    if st.button("💬 反馈建议", type="secondary"):
+        st.info("感谢您的关注！请在左侧边栏提交反馈")

@@ -15,14 +15,42 @@
       "rating": 4,
       "content": "快速反馈：对话体验良好\n用户问题：薪资包括哪些组成部分",
       "contact": "快速反馈"
+    },
+    {
+      "id": "52befd28",
+      "timestamp": "2025-12-05T11:24:01.576725",
+      "type": "Agent使用体验",
+      "rating": 3,
+      "content": "输出太慢了",
+      "contact": ""
+    },
+    {
+      "id": "54111334",
+      "timestamp": "2025-12-05T11:33:34.358238",
+      "type": "Agent使用体验",
+      "rating": 2,
+      "content": "输出太慢了，在上面选择问题的时候，界面像卡顿一样",
+      "contact": ""
+    },
+    {
+      "id": "57f03cca",
+      "timestamp": "2025-12-05T12:09:26.166918",
+      "type": "使用体验",
+      "rating": 3,
+      "content": "响应太慢",
+      "contact": ""
     }
   ],
   "summary": {
-    "total_feedbacks": 2,
-    "average_rating": 4.5,
+    "total_feedbacks": 5,
+    "average_rating": 3.4,
     "bug_reports": 0,
     "feature_requests": 0,
     "general_feedback": 0,
-    "agent_feedback": 2
+    "agent_feedback": 4,
+    "usage_feedback": 5,
+    "suggestion": 0,
+    "bug_report": 0,
+    "other": 0
   }
 }
